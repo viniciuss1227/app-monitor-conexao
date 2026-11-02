@@ -1,0 +1,68 @@
+{
+  "models": [
+    {
+      "id": "model-linear-v1",
+      "name": "Modelo A (Regressão Linear)",
+      "description": "Modelo preditivo baseado em séries temporais curtas."
+    },
+    {
+      "id": "model-rf-v2",
+      "name": "Modelo B (Random Forest)",
+      "description": "Modelo de árvores de decisão focado em dispersão de jitter."
+    }
+  ],
+  "currentForecast": {
+    "probe": {
+      "id": 10024,
+      "location": "São Paulo, SP",
+      "distanceKm": 12.4
+    },
+    "modelInUse": "Modelo A (Regressão Linear)",
+    "timestamp": "2026-10-16T19:00:00Z",
+    "assessment": {
+      "quality": "MODERATE",
+      "label": "Moderada",
+      "severity": "warning"
+    },
+    "metrics": {
+      "predictedAvgRttMs": 48.5,
+      "predictedPacketLossPct": 1.8,
+      "predictedJitterMs": 4.2
+    },
+    "recommendation": {
+      "code": "REDUCE_NETWORK_USAGE",
+      "summary": "Conexão com instabilidades pontuais.",
+      "friendlyMessage": "Sua internet pode apresentar pequenas oscilações. Para chamadas de vídeo importantes, considere manter os dados móveis de prontidão."
+    }
+  },
+  "activitiesAssessment": [
+    {
+      "id": "video_call",
+      "title": "Chamada de Vídeo",
+      "status": "ATENCAO",
+      "statusLabel": "Pode apresentar instabilidade",
+      "recommended": false
+    },
+    {
+      "id": "streaming_hd",
+      "title": "Assistir Streaming (HD)",
+      "status": "APTO",
+      "statusLabel": "Funcionamento adequado com buffer",
+      "recommended": true
+    },
+    {
+      "id": "online_gaming",
+      "title": "Jogos Online em Tempo Real",
+      "status": "NAO_RECOMENDADO",
+      "statusLabel": "Latência elevada para partidas competitivas",
+      "recommended": false
+    },
+    {
+      "id": "web_browsing",
+      "title": "Navegação e Mensagens",
+      "status": "APTO",
+      "statusLabel": "Excelente estabilidade para páginas e áudios",
+      "recommended": true
+    }
+  ]
+}
