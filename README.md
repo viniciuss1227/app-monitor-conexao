@@ -2,10 +2,10 @@
 
 > **Projeto Interdisciplinar — Análise e Projeto de Sistemas II (APS II)**  
 > **Centro Universitário Braz Cubas — Semestre 2026/2**  
-> **Integração Curricular:** Dispositivos Móveis • Análise e Projeto de Sistemas • Redes de Computadores  
-> **Docentes Responsáveis:** Prof. Davi de Oliveira Cruz e Profa. Aline Santos  
+> **Integração Curricular:** Programação para Dispositivos Móveis • Análise e Projeto de Sistemas • Redes de Computadores  
+> **Docentes Responsáveis:** Prof. Davi de Oliveira Cruz, Profa. Aline dos Santos e Profa. Denise Braito
 
----
+--- 
 
 ## 📌 Visão Geral do Produto
 
