@@ -17,12 +17,17 @@ O projeto está fundamentado no **ODS 9 (Indústria, Inovação e Infraestrutura
 
 ## 📱 Demonstração Visual
 
-| Interface do Aplicativo (React Native) | Documentação Interativa (Swagger OpenAPI) |
-| :--<img width="434" height="864" alt="Modelo A" src="https://github.com/user-attachments/assets/1b34dd59-37c4-475f-88d6-07204c980309" />
-<img width="427" height="871" alt="Modelo C" src="https://github.com/user-attachments/assets/2963bdef-c186-4956-8a77-851099530d14" />
--: | <img width="1155" height="730" alt="Swagger" src="https://github.com/user-attachments/assets/5caef3ab-5ce1-4749-a30f-4cdfa7f9404a" /> |
-| *(Adicione a imagem do app aqui)* | *(Adicione a imagem do Swagger aqui)* |
+### Interface do Aplicativo (React Native)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/1b34dd59-37c4-475f-88d6-07204c980309" width="270" alt="Previsão - Modelo A" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/2963bdef-c186-4956-8a77-851099530d14" width="270" alt="Previsão - Modelo C" />
+</p>
 
+### Documentação da API (Swagger OpenAPI 3.0)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/5caef3ab-5ce1-4749-a30f-4cdfa7f9404a" width="800" alt="Swagger UI" />
+</p>
 ---
 
 ## 📡 Fundamentos de Redes de Computadores & Telemetria
