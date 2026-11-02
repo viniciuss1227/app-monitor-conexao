@@ -18,7 +18,9 @@ O projeto está fundamentado no **ODS 9 (Indústria, Inovação e Infraestrutura
 ## 📱 Demonstração Visual
 
 | Interface do Aplicativo (React Native) | Documentação Interativa (Swagger OpenAPI) |
-| :---: | :---: |
+| :--<img width="434" height="864" alt="Modelo A" src="https://github.com/user-attachments/assets/1b34dd59-37c4-475f-88d6-07204c980309" />
+<img width="427" height="871" alt="Modelo C" src="https://github.com/user-attachments/assets/2963bdef-c186-4956-8a77-851099530d14" />
+-: | <img width="1155" height="730" alt="Swagger" src="https://github.com/user-attachments/assets/5caef3ab-5ce1-4749-a30f-4cdfa7f9404a" /> |
 | *(Adicione a imagem do app aqui)* | *(Adicione a imagem do Swagger aqui)* |
 
 ---
@@ -81,16 +83,18 @@ app-monitor-conexao/
 
 ---
 
-## 🔌 Contratos de API Consumidos
+## 🔌 Contratos da API & Status de Integração
 
-| Método | Endpoint | Finalidade |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/health` | Validação de integridade do servidor de retaguarda |
-| `GET` | `/api/v1/models` | Obtenção do catálogo de modelos de inteligência artificial disponíveis |
-| `GET` | `/api/v1/locations` | Listagem das sondas públicas RIPE Atlas mapeadas em território nacional |
-| `GET` | `/api/v1/forecasts/nearby` | Previsão por coordenadas geográficas (`lat`, `lon`, `model_id`) |
-| `GET` | `/api/v1/forecasts/probes/{id}/timeline` | Consulta da série temporal horária prevista para as próximas 24 horas |
-| `POST` | `/api/v1/activity/check` | Checagem de conformidade da rede para tarefas específicas (Vídeo, Áudio, Streaming) |
+A API RESTful em Java Spring Boot disponibiliza os seguintes contratos documentados via OpenAPI/Swagger, integrados ao aplicativo móvel conforme o escopo do *Walking Skeleton*:
+
+| Método | Endpoint | Finalidade | Status no App Mobile |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/models` | Obtenção do catálogo de modelos de inteligência artificial | **Consumido** (Seleção de IA) |
+| `GET` | `/api/v1/forecasts/nearby` | Previsão por coordenadas geográficas (`lat`, `lon`, `model_id`) | **Consumido** (Telemetria & Diagnóstico) |
+| `GET` | `/api/v1/health` | Validação de integridade e disponibilidade do backend | **Consumido** (Diagnóstico & *Smoke Test*) |
+| `GET` | `/api/v1/locations` | Listagem das sondas públicas RIPE Atlas mapeadas | Documentado (Resolvido via GPS) |
+| `POST` | `/api/v1/activity/check` | Checagem de conformidade para tarefas específicas | Mapeado no Backend (Backlog Futuro) |
+| `GET` | `/api/v1/forecasts/probes/{id}/timeline` | Projeção temporal horária para as próximas 24 horas | Mapeado no Backend (Backlog Futuro) |
 
 ---
 
