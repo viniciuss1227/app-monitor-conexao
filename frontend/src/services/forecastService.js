@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // COLOQUE O SEU IPV4 AQUI (Exemplo: '192.168.15.24')
-const MEU_IP_PC = '192.168.15.13'; // No PC Web pode deixar localhost; se for rodar no celular, coloque seu IP (ex: '192.168.15.24')
+const MEU_IP_PC = '192.168.15.17'; // No PC Web pode deixar localhost; se for rodar no celular, coloque seu IP (ex: '192.168.15.24')
 
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
