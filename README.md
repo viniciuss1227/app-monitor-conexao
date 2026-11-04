@@ -19,9 +19,11 @@ O projeto está fundamentado no **ODS 9 (Indústria, Inovação e Infraestrutura
 
 ### Interface do Aplicativo (React Native)
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/1b34dd59-37c4-475f-88d6-07204c980309" width="270" alt="Previsão - Modelo A" />
+  <img src="<img width="1080" height="3460" alt="a" src="https://github.com/user-attachments/assets/979c3ab7-2a6b-4979-95e1-99170961445c" />
+" width="280" alt="Previsão - Modelo A" />
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://github.com/user-attachments/assets/2963bdef-c186-4956-8a77-851099530d14" width="270" alt="Previsão - Modelo C" />
+  <img src="<img width="1080" height="3476" alt="b" src="https://github.com/user-attachments/assets/1b110a05-3362-4f94-bb83-39d5612df3dc" />
+" width="280" alt="Previsão - Modelo B" />
 </p>
 
 ### Documentação da API (Swagger OpenAPI 3.0)
