@@ -1,2 +1,4 @@
 **/target/
 .expo/dev/logs/start.log
+.expo/
+*.log
