@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,295 +8,558 @@ import {
   StatusBar,
   ActivityIndicator,
   TouchableOpacity,
+  Modal,
+  Platform,
 } from 'react-native';
-import { Ionicons, Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Feather } from '@expo/vector-icons';
 import {
-  obterModeloSalvo,
-  salvarModelo,
-  listarModelos,
-  obterPrevisaoProxima,
+  getModels,
+  getNearbyForecast,
+  checkActivity,
+  getProbeTimeline,
 } from './src/services/forecastService';
 
-const FALLBACK_SP = { lat: -23.5505, lon: -46.6333 };
+// Cidades de referência com sondas mapeadas na API
+const LOCATIONS = [
+  { id: 'sp', name: 'São Paulo (SP)', coords: { lat: -23.5505, lon: -46.6333 } },
+  { id: 'rj', name: 'Rio de Janeiro (RJ)', coords: { lat: -22.9068, lon: -43.1729 } },
+  { id: 'am', name: 'Manaus (AM)', coords: { lat: -3.1190, lon: -60.0217 } },
+  { id: 'gps', name: 'Meu GPS (Automático)', coords: null },
+];
 
-const GUIA_QUALIDADE = {
-  GOOD: {
-    titulo: 'Estável',
-    subtitulo: 'Baixo risco de falhas',
-    cor: '#10B981', // Verde
-    badge: 'rgba(16, 185, 129, 0.15)',
-    resumoPratico: 'Tudo liberado: chamadas de vídeo, streaming em alta resolução e jogos rodam sem travamento.',
-  },
-  MODERATE: {
-    titulo: 'Moderada',
-    subtitulo: 'Atenção em tarefas pesadas',
-    cor: '#F59E0B', // Âmbar/Laranja
-    badge: 'rgba(245, 158, 11, 0.15)',
-    resumoPratico: 'Navegação, estudos e mensagens abrem normalmente. Vídeos ao vivo e reuniões podem oscilar.',
-  },
-  UNSTABLE: {
-    titulo: 'Instável',
-    subtitulo: 'Alto risco de travamento',
-    cor: '#EF4444', // Vermelho
-    badge: 'rgba(239, 68, 68, 0.15)',
-    resumoPratico: 'Rede congestionada na região. Recomendado baixar arquivos antes para uso offline.',
-  },
-};
+// Horários de teste rápido para a aba de atividades
+const TIME_SLOTS = [
+  { id: '18:00', label: '18:00', iso: '2026-08-20T18:00:00Z' },
+  { id: '19:00', label: '19:00', iso: '2026-08-20T19:00:00Z' },
+  { id: '20:00', label: '20:00 (Pico)', iso: '2026-08-20T20:00:00Z' },
+  { id: '21:00', label: '21:00', iso: '2026-08-20T21:00:00Z' },
+];
+
+// As 6 atividades oficiais aceitas pela API
+const ACTIVITIES = [
+  { id: 'VIDEO_CALL', label: 'Videoconferência', icon: 'video' },
+  { id: 'AUDIO_CALL', label: 'Chamada de áudio', icon: 'phone-call' },
+  { id: 'STREAMING', label: 'Streaming HD', icon: 'tv' },
+  { id: 'FILE_UPLOAD', label: 'Envio de arquivos', icon: 'upload-cloud' },
+  { id: 'WEB_BROWSING', label: 'Navegação e estudos', icon: 'globe' },
+  { id: 'MESSAGING', label: 'Mensagens instantâneas', icon: 'message-square' },
+];
+
+// Classificação em 3 níveis (Adequada, Com Ressalvas, Não Recomendada)
+function getActivityEvaluation(result) {
+  if (!result) return null;
+
+  const isSuitable = result.suitable;
+  const isModerate =
+    result.recommendation?.code === 'REDUCE_NETWORK_USAGE' ||
+    result.forecast?.quality === 'MODERATE';
+
+  if (!isSuitable) {
+    return {
+      title: 'Não recomendada para este horário',
+      color: '#EF4444',
+      bg: '#7F1D1D20',
+      border: '#DC2626',
+      icon: 'alert-triangle',
+    };
+  }
+
+  if (isModerate) {
+    return {
+      title: 'Adequada com ressalvas',
+      color: '#F59E0B',
+      bg: '#78350F20',
+      border: '#D97706',
+      icon: 'alert-circle',
+    };
+  }
+
+  return {
+    title: 'Adequada para este horário',
+    color: '#10B981',
+    bg: '#064E3B20',
+    border: '#059669',
+    icon: 'check-circle',
+  };
+}
 
 export default function App() {
-  const [modelos, setModelos] = useState([]);
-  const [modelId, setModelId] = useState('model-a');
-  const [coords, setCoords] = useState(FALLBACK_SP);
-  const [dados, setDados] = useState(null);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(null);
+  const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'activity'
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  // Modelos
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('model-a');
+
+  // Localização
+  const [selectedLocation, setSelectedLocation] = useState(LOCATIONS[0]);
+  const [currentCoords, setCurrentCoords] = useState(LOCATIONS[0].coords);
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
+
+  // Previsão e Linha do Tempo (Aba Previsão)
+  const [forecast, setForecast] = useState(null);
+  const [timelineItems, setTimelineItems] = useState([]);
+  const [selectedTimelineItem, setSelectedTimelineItem] = useState(null);
+
+  // Atividades (Aba Atividades)
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState(TIME_SLOTS[2]); // 20:00
+  const [selectedActivity, setSelectedActivity] = useState('VIDEO_CALL');
+  const [activityResult, setActivityResult] = useState(null);
+  const [loadingActivity, setLoadingActivity] = useState(false);
 
   useEffect(() => {
-    inicializar();
+    bootstrap();
   }, []);
 
-  async function inicializar() {
-    setCarregando(true);
-    setErro(null);
+  async function bootstrap() {
     try {
-      const [salvo, catalogo] = await Promise.all([
-        obterModeloSalvo(),
-        listarModelos(),
-      ]);
-      
-      const nomesAbreviados = catalogo.map(m => ({
-        ...m,
-        shortName: m.name.replace('Modelo ', '') // Para caber na pill
-      }));
-      setModelos(nomesAbreviados);
+      setLoading(true);
+      setErrorMsg(null);
 
-      const idValido = catalogo.some((m) => m.id === salvo)
-        ? salvo
-        : catalogo[0]?.id || 'model-a';
-      setModelId(idValido);
+      const savedModel = await AsyncStorage.getItem('@selected_model');
+      const activeModel = savedModel || 'model-a';
+      setSelectedModel(activeModel);
 
-      let posicaoAtual = FALLBACK_SP;
+      const modelsData = await getModels();
+      setModels(modelsData.items || []);
+
+      const coords = LOCATIONS[0].coords;
+      setCurrentCoords(coords);
+
+      await fetchAllData(activeModel, coords, selectedTimeSlot.iso, selectedActivity);
+    } catch {
+      setErrorMsg('Serviço em inicialização no Render ou sem conexão com a internet.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchAllData(modelId, coords, timeIso, activityId) {
+    try {
+      // 1. Previsão da sonda mais próxima
+      const forecastData = await getNearbyForecast(coords.lat, coords.lon, modelId);
+      setForecast(forecastData);
+
+      // 2. Linha do tempo da sonda encontrada
+      const probeId = forecastData?.matchedProbe?.probeId || 900001;
+      try {
+        const timelineData = await getProbeTimeline(probeId, modelId);
+        const items = timelineData?.items || [];
+        setTimelineItems(items);
+        const defaultItem = items.find((i) => i.predictionFor.includes('20:00')) || items[0] || null;
+        setSelectedTimelineItem(defaultItem);
+      } catch {
+        setTimelineItems([]);
+        setSelectedTimelineItem(null);
+      }
+
+      // 3. Validação da atividade
+      setLoadingActivity(true);
+      try {
+        const actData = await checkActivity(modelId, coords.lat, coords.lon, activityId, timeIso);
+        setActivityResult(actData);
+      } catch {
+        setActivityResult(null);
+      } finally {
+        setLoadingActivity(false);
+      }
+    } catch {
+      setErrorMsg('Não foi possível sincronizar com a sonda regional.');
+    }
+  }
+
+  async function handleModelSelect(modelId) {
+    if (modelId === selectedModel) return;
+    setSelectedModel(modelId);
+    await AsyncStorage.setItem('@selected_model', modelId);
+    if (currentCoords) {
+      await fetchAllData(modelId, currentCoords, selectedTimeSlot.iso, selectedActivity);
+    }
+  }
+
+  async function handleLocationChange(locOption) {
+    setSelectedLocation(locOption);
+    setLocationModalVisible(false);
+
+    let targetCoords = locOption.coords;
+
+    if (locOption.id === 'gps') {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          const loc =
-            (await Location.getLastKnownPositionAsync({})) ||
-            (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
-          if (loc?.coords) {
-            posicaoAtual = { lat: loc.coords.latitude, lon: loc.coords.longitude };
-          }
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          targetCoords = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+        } else {
+          targetCoords = LOCATIONS[0].coords;
         }
-      } catch {}
+      } catch {
+        targetCoords = LOCATIONS[0].coords;
+      }
+    }
 
-      setCoords(posicaoAtual);
-      const previsao = await obterPrevisaoProxima(posicaoAtual.lat, posicaoAtual.lon, idValido, null);
-      setDados(previsao);
-    } catch (e) {
-      setErro(e.message);
-    } finally {
-      setCarregando(false);
+    setCurrentCoords(targetCoords);
+    await fetchAllData(selectedModel, targetCoords, selectedTimeSlot.iso, selectedActivity);
+  }
+
+  async function handleActivitySelect(activityId) {
+    setSelectedActivity(activityId);
+    if (currentCoords) {
+      setLoadingActivity(true);
+      try {
+        const actData = await checkActivity(
+          selectedModel,
+          currentCoords.lat,
+          currentCoords.lon,
+          activityId,
+          selectedTimeSlot.iso
+        );
+        setActivityResult(actData);
+      } catch {
+        setActivityResult(null);
+      } finally {
+        setLoadingActivity(false);
+      }
     }
   }
 
-  async function trocarModelo(novoId) {
-    setModelId(novoId);
-    await salvarModelo(novoId);
-    setCarregando(true);
-    try {
-      const previsao = await obterPrevisaoProxima(coords.lat, coords.lon, novoId, null);
-      setDados(previsao);
-    } catch (e) {
-      setErro(e.message);
-    } finally {
-      setCarregando(false);
+  async function handleTimeSlotSelect(timeSlot) {
+    setSelectedTimeSlot(timeSlot);
+    if (currentCoords) {
+      setLoadingActivity(true);
+      try {
+        const actData = await checkActivity(
+          selectedModel,
+          currentCoords.lat,
+          currentCoords.lon,
+          selectedActivity,
+          timeSlot.iso
+        );
+        setActivityResult(actData);
+      } catch {
+        setActivityResult(null);
+      } finally {
+        setLoadingActivity(false);
+      }
     }
   }
 
-  if (carregando) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color="#7C3AED" />
-          <Text style={styles.loadingText}>Consultando previsão da rede em tempo real...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const statusConfig = {
+    GOOD: { label: 'Conexão Boa', color: '#10B981', bg: '#064E3B20', border: '#059669' },
+    MODERATE: { label: 'Conexão Regular', color: '#F59E0B', bg: '#78350F20', border: '#D97706' },
+    UNSTABLE: { label: 'Conexão Instável', color: '#EF4444', bg: '#7F1D1D20', border: '#DC2626' },
+  };
 
-  if (erro) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerBox}>
-          <Ionicons name="cloud-offline-outline" size={48} color="#EF4444" style={{marginBottom: 16}}/>
-          <Text style={styles.errorTitle}>Sem Conexão com o Servidor</Text>
-          <Text style={styles.errorText}>
-            Não foi possível comunicar com a API Java (porta 8080). Verifique se o servidor está ativo no terminal e tente novamente.
-          </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={inicializar}>
-            <Text style={styles.retryText}>Tentar Novamente</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const activeQuality = selectedTimelineItem?.quality || forecast?.assessment?.quality;
+  const activeScore = selectedTimelineItem?.qualityScore ?? forecast?.assessment?.qualityScore ?? '--';
+  const activeRtt = selectedTimelineItem?.predictedAvgRttMs ?? forecast?.prediction?.predictedAvgRttMs;
+  const activeLoss = selectedTimelineItem?.predictedPacketLossPct ?? forecast?.prediction?.predictedPacketLossPct;
 
-  if (!dados) return null;
+  const currentStatus = statusConfig[activeQuality] || {
+    label: 'Calculando', color: '#64748B', bg: '#1E293B', border: '#334155',
+  };
 
-  const quality = dados.assessment?.quality || 'MODERATE';
-  const score = dados.assessment?.qualityScore ?? 65;
-  const rtt = dados.prediction?.predictedAvgRttMs ?? 0;
-  const loss = dados.prediction?.predictedPacketLossPct ?? 0;
-  const distanceKm = dados.matchedProbe?.distanceKm ?? 0;
-  const probeId = dados.matchedProbe?.probeId ?? 'N/A';
-  const info = GUIA_QUALIDADE[quality] || GUIA_QUALIDADE.MODERATE;
+  const formatHour = (iso) => {
+    if (!iso) return '--:--';
+    const match = iso.match(/T(\d{2}:\d{2})/);
+    return match ? match[1] : iso;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <StatusBar barStyle="light-content" backgroundColor="#080C14" />
+      <View style={styles.appShell}>
         
-        {/* CABEÇALHO */}
+        {/* Topo Global */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.overline}>PAINEL DE PREVISÃO</Text>
-            <Text style={styles.title}>Qualidade da Conexão</Text>
-            <View style={styles.locationRow}>
-              <View style={styles.liveDot} />
-              <Text style={styles.locationText}>Sonda RIPE #{probeId} • Distância: {distanceKm} km</Text>
-            </View>
+            <Text style={styles.brandTitle}>SENTINELA DE REDES</Text>
+            <Text style={styles.screenHeading}>
+              {activeTab === 'forecast' ? 'Previsão Regional' : 'Validação de Tarefas'}
+            </Text>
           </View>
-          <View style={styles.iconButton}>
-            <Ionicons name="bar-chart" size={20} color="#06B6D4" />
-          </View>
+          <TouchableOpacity
+            style={styles.locationPill}
+            onPress={() => setLocationModalVisible(true)}
+          >
+            <Feather name="map-pin" size={12} color="#818CF8" />
+            <Text style={styles.locationPillText} numberOfLines={1}>
+              {selectedLocation.name.split(' (')[0]}
+            </Text>
+            <Feather name="chevron-down" size={13} color="#64748B" />
+          </TouchableOpacity>
         </View>
 
-        {/* SELETOR DE MODELOS */}
-        <View style={styles.segmentedControl}>
-          {modelos.map((m) => {
-            const isAtivo = m.id === modelId;
+        {/* Seletor de Modelos */}
+        <View style={styles.segmentedContainer}>
+          {['model-a', 'model-b', 'model-c', 'model-d'].map((id, index) => {
+            const isSelected = selectedModel === id;
             return (
-              <TouchableOpacity 
-                key={m.id}
-                style={[styles.segmentTab, isAtivo && styles.segmentActive]}
-                onPress={() => trocarModelo(m.id)}
+              <TouchableOpacity
+                key={id}
+                style={[styles.segmentTab, isSelected && styles.segmentTabActive]}
+                onPress={() => handleModelSelect(id)}
               >
-                <Text style={[styles.segmentText, isAtivo && styles.segmentTextActive]}>
-                  Modelo {m.shortName}
+                <Text style={[styles.segmentLabel, isSelected && styles.segmentLabelActive]}>
+                  {`Modelo ${String.fromCharCode(65 + index)}`}
                 </Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* CARD PRINCIPAL (HERO) */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroHeader}>
-            <Text style={styles.heroOverline}>ODS 9 • INFRAESTRUTURA</Text>
-            <View style={styles.iconCircle}>
-              <View style={styles.innerDot} />
+        {/* Conteúdo com Scroll */}
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {loading ? (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="small" color="#6366F1" />
+              <Text style={styles.centerLoadingText}>Sincronizando com a API do Render...</Text>
             </View>
-          </View>
-          <Text style={styles.heroTitle}>Diagnóstico de Estabilidade</Text>
-          
-          <View style={styles.scoreRow}>
-            <Text style={styles.scoreValue}>{score}</Text>
-            <Text style={styles.scoreSuffix}>/ 100</Text>
-            <View style={{ flex: 1 }} />
-            <View style={[styles.badgeContainer, { backgroundColor: info.badge, borderColor: info.badge }]}>
-              <View style={[styles.badgeDot, { backgroundColor: info.cor }]} />
-              <Text style={[styles.badgeText, { color: info.cor }]}>{info.titulo}</Text>
+          ) : errorMsg ? (
+            <View style={styles.errorSurface}>
+              <Feather name="alert-circle" size={24} color="#EF4444" />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => bootstrap()}>
+                <Text style={styles.retryBtnText}>Tentar Novamente</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-          
-          <Text style={[styles.heroSubText, { color: info.cor }]}>{info.subtitulo}</Text>
-          
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: `${score}%`, backgroundColor: info.cor }]} />
-          </View>
+          ) : activeTab === 'forecast' ? (
+            /* ================= ABA 1: PREVISÃO GERAL ================= */
+            <View>
+              {/* Card de Estabilidade */}
+              <View style={styles.cardSurface}>
+                <View style={styles.cardHeader}>
+                  <View style={[styles.statusBadge, { backgroundColor: currentStatus.bg, borderColor: currentStatus.border }]}>
+                    <View style={[styles.statusDot, { backgroundColor: currentStatus.color }]} />
+                    <Text style={[styles.statusBadgeText, { color: currentStatus.color }]}>
+                      {currentStatus.label}
+                    </Text>
+                  </View>
+                  <Text style={styles.scoreText}>
+                    Índice <Text style={{ color: '#F8FAFC', fontWeight: '800' }}>{activeScore}</Text>/100
+                  </Text>
+                </View>
 
-          <View style={styles.tipBox}>
-            <Ionicons name="bulb-outline" size={22} color="#06B6D4" style={{ marginTop: 2 }} />
-            <View style={styles.tipContent}>
-              <Text style={styles.tipTitle}>Para o dia a dia</Text>
-              <Text style={styles.tipText}>{info.resumoPratico}</Text>
+                <Text style={styles.recommendationMessage}>
+                  {forecast?.recommendation?.message || 'Conexão operando dentro dos padrões históricos esperados.'}
+                </Text>
+
+                <View style={styles.probeFootnote}>
+                  <Feather name="radio" size={13} color="#64748B" />
+                  <Text style={styles.probeFootnoteText}>
+                    Sonda RIPE #{forecast?.matchedProbe?.probeId ?? '---'} a {forecast?.matchedProbe?.distanceKm?.toFixed(1) ?? '--'} km
+                  </Text>
+                </View>
+              </View>
+
+              {/* Régua de Horários (Timeline Strip Deslizável) */}
+              <View style={styles.timelineSectionHeader}>
+                <Text style={styles.sectionTitle}>Comportamento por Horário</Text>
+                <Text style={styles.sectionSub}>Arraste e selecione o horário</Text>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.timelineScrollList}
+              >
+                {timelineItems.length > 0 ? (
+                  timelineItems.map((item) => {
+                    const isSelected = selectedTimelineItem?.predictionFor === item.predictionFor;
+                    const itemConf = statusConfig[item.quality] || statusConfig.MODERATE;
+                    const hourText = formatHour(item.predictionFor);
+
+                    return (
+                      <TouchableOpacity
+                        key={item.predictionFor}
+                        style={[styles.timelineCard, isSelected && styles.timelineCardActive]}
+                        onPress={() => setSelectedTimelineItem(item)}
+                      >
+                        <Text style={[styles.timelineHour, isSelected && styles.timelineHourActive]}>
+                          {hourText}
+                        </Text>
+                        <View style={styles.timelineStatusRow}>
+                          <View style={[styles.timelineDot, { backgroundColor: itemConf.color }]} />
+                          <Text style={[styles.timelineScore, isSelected && styles.timelineScoreActive]}>
+                            {item.qualityScore}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.emptyTimelineText}>Carregando série temporal...</Text>
+                )}
+              </ScrollView>
+
+              {/* Métricas Técnicas */}
+              <Text style={[styles.sectionTitle, { marginTop: 14 }]}>
+                Métricas Previstas {selectedTimelineItem ? `(${formatHour(selectedTimelineItem.predictionFor)})` : ''}
+              </Text>
+              <View style={styles.metricsGrid}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Latência (RTT)</Text>
+                  <View style={styles.metricValRow}>
+                    <Text style={styles.metricValue}>
+                      {activeRtt !== undefined ? Number(activeRtt).toFixed(1) : '--'}
+                    </Text>
+                    <Text style={styles.metricUnit}>ms</Text>
+                  </View>
+                  <Text style={styles.metricHint}>Abaixo de 60 ms evita atrasos na transmissão de voz.</Text>
+                </View>
+
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Perda de Pacotes</Text>
+                  <View style={styles.metricValRow}>
+                    <Text style={styles.metricValue}>
+                      {activeLoss !== undefined ? Number(activeLoss).toFixed(1) : '--'}
+                    </Text>
+                    <Text style={styles.metricUnit}>%</Text>
+                  </View>
+                  <Text style={styles.metricHint}>Acima de 2% causa travamentos perceptíveis em transmissões.</Text>
+                </View>
+              </View>
+
+              <Text style={styles.disclaimer}>
+                Referência pública via RIPE Atlas. Os dados refletem condições estruturais da rede regional, sem monitoramento de dispositivos individuais.
+              </Text>
             </View>
+          ) : (
+            /* ================= ABA 2: PREVISÃO POR ATIVIDADE ================= */
+            <View>
+              <Text style={styles.sectionTitle}>Horário Previsto (Base 20/08)</Text>
+              <View style={styles.timeSlotsRow}>
+                {TIME_SLOTS.map((slot) => {
+                  const isSelected = selectedTimeSlot.id === slot.id;
+                  return (
+                    <TouchableOpacity
+                      key={slot.id}
+                      style={[styles.timeSlotPill, isSelected && styles.timeSlotPillActive]}
+                      onPress={() => handleTimeSlotSelect(slot)}
+                    >
+                      <Text style={[styles.timeSlotPillText, isSelected && styles.timeSlotPillTextActive]}>
+                        {slot.id}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[styles.sectionTitle, { marginTop: 14 }]}>O que você deseja fazer?</Text>
+              <View style={styles.activitiesContainer}>
+                {ACTIVITIES.map((act) => {
+                  const isActive = selectedActivity === act.id;
+                  return (
+                    <TouchableOpacity
+                      key={act.id}
+                      style={[styles.activityRow, isActive && styles.activityRowActive]}
+                      onPress={() => handleActivitySelect(act.id)}
+                    >
+                      <View style={styles.activityLeft}>
+                        <View style={[styles.activityIconWrap, isActive && styles.activityIconWrapActive]}>
+                          <Feather name={act.icon} size={15} color={isActive ? '#6366F1' : '#94A3B8'} />
+                        </View>
+                        <Text style={[styles.activityLabel, isActive && styles.activityLabelActive]}>
+                          {act.label}
+                        </Text>
+                      </View>
+                      <View style={[styles.radioCircle, isActive && styles.radioCircleActive]}>
+                        {isActive && <View style={styles.radioDot} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Card de Veredito com 3 Níveis */}
+              <View style={styles.resultSurface}>
+                {loadingActivity ? (
+                  <View style={styles.resultLoading}>
+                    <ActivityIndicator size="small" color="#6366F1" />
+                    <Text style={styles.resultLoadingText}>Avaliando estabilidade para às {selectedTimeSlot.id}...</Text>
+                  </View>
+                ) : activityResult ? (() => {
+                  const evalStatus = getActivityEvaluation(activityResult);
+                  return (
+                    <View>
+                      <View style={styles.resultVerdictRow}>
+                        <Feather
+                          name={evalStatus.icon}
+                          size={18}
+                          color={evalStatus.color}
+                        />
+                        <Text
+                          style={[
+                            styles.resultVerdictTitle,
+                            { color: evalStatus.color },
+                          ]}
+                        >
+                          {evalStatus.title}
+                        </Text>
+                      </View>
+                      <Text style={styles.resultVerdictDescription}>
+                        {activityResult.recommendation?.message ||
+                          (activityResult.suitable
+                            ? 'A conexão prevista atende a esta atividade neste período.'
+                            : 'Há risco elevado de travamentos e oscilações.')}
+                      </Text>
+                    </View>
+                  );
+                })() : null}
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Barra de Abas Inferior */}
+        <View style={styles.bottomTabBar}>
+          <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab('forecast')}>
+            <Feather name="activity" size={18} color={activeTab === 'forecast' ? '#6366F1' : '#64748B'} />
+            <Text style={[styles.tabButtonLabel, activeTab === 'forecast' && styles.tabButtonLabelActive]}>
+              Previsão
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab('activity')}>
+            <Feather name="check-square" size={18} color={activeTab === 'activity' ? '#6366F1' : '#64748B'} />
+            <Text style={[styles.tabButtonLabel, activeTab === 'activity' && styles.tabButtonLabelActive]}>
+              Atividades
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Modal de Localização */}
+      <Modal visible={locationModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Selecionar Região da Sonda</Text>
+              <TouchableOpacity onPress={() => setLocationModalVisible(false)}>
+                <Feather name="x" size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {LOCATIONS.map((loc) => {
+              const isSelected = selectedLocation.id === loc.id;
+              return (
+                <TouchableOpacity
+                  key={loc.id}
+                  style={[styles.modalOption, isSelected && styles.modalOptionActive]}
+                  onPress={() => handleLocationChange(loc)}
+                >
+                  <Text style={[styles.modalOptionText, isSelected && styles.modalOptionTextActive]}>
+                    {loc.name}
+                  </Text>
+                  {isSelected && <Feather name="check" size={16} color="#6366F1" />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Detalhes da previsão</Text>
-          <Text style={styles.sectionSubtitle}>Agora</Text>
-        </View>
-
-        {/* GRID DE TELEMETRIA */}
-        <View style={styles.gridContainer}>
-          
-          <View style={styles.gridCard}>
-            <View style={styles.cardHeader}>
-              <Feather name="activity" size={16} color="#94A3B8" />
-              <Text style={styles.cardTitle}>Tempo de Resposta</Text>
-            </View>
-            <View style={styles.metricRow}>
-              <Text style={styles.metricValue}>{rtt}</Text>
-              <Text style={styles.metricUnit}>ms</Text>
-            </View>
-            <View style={styles.badgeCyan}>
-              <Text style={styles.badgeCyanText}>{rtt < 60 ? 'Resposta Rápida' : 'Atraso Moderado'}</Text>
-            </View>
-            <Text style={styles.cardDesc}>É a rapidez de resposta (Ping). Abaixo de 60 ms evita que sua voz atrase ou chamadas fiquem robóticas.</Text>
-          </View>
-
-          <View style={styles.gridCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="water-outline" size={16} color="#94A3B8" />
-              <Text style={styles.cardTitle}>Perda de Dados</Text>
-            </View>
-            <View style={styles.metricRow}>
-              <Text style={styles.metricValue}>{loss}</Text>
-              <Text style={styles.metricUnit}>%</Text>
-            </View>
-            <View style={styles.badgeCyan}>
-              <Text style={styles.badgeCyanText}>{loss < 1 ? 'Quase Nula' : 'Atenção (Perda Visível)'}</Text>
-            </View>
-            <Text style={styles.cardDesc}>Pedaços de áudio ou imagem que falham no caminho. Acima de 2% faz vídeos travarem e carregarem (buffering).</Text>
-          </View>
-
-          <View style={styles.gridCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="bar-chart-outline" size={16} color="#94A3B8" />
-              <Text style={styles.cardTitle}>Nota Geral</Text>
-            </View>
-            <View style={styles.metricRow}>
-              <Text style={styles.metricValue}>{score}</Text>
-              <Text style={styles.metricUnit}>/ 100</Text>
-            </View>
-            <View style={styles.badgeCyan}>
-              <Text style={styles.badgeCyanText}>Pontuação da Rede</Text>
-            </View>
-            <Text style={styles.cardDesc}>Nota unificada calculada pelo modelo. Quanto mais próxima de 100, mais estável e confiável é a conexão.</Text>
-          </View>
-
-          <View style={styles.gridCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="location-outline" size={16} color="#94A3B8" />
-              <Text style={styles.cardTitle}>Sensor Regional</Text>
-            </View>
-            <View style={styles.metricRow}>
-              <Text style={styles.metricValue}>{distanceKm}</Text>
-              <Text style={styles.metricUnit}>km</Text>
-            </View>
-            <View style={styles.badgeCyan}>
-              <Text style={styles.badgeCyanText}>Distância da Sonda</Text>
-            </View>
-            <Text style={styles.cardDesc}>Distância até o sensor público de referência. Avalia a infraestrutura da região, não o roteador local.</Text>
-          </View>
-
-        </View>
-
-        <Text style={styles.disclaimer}>{dados.metadata?.disclaimer || "A previsão está associada à probe RIPE Atlas como referência geográfica e não representa medição direta do dispositivo do usuário."}</Text>
-
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -304,299 +567,489 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#080C14',
   },
-  centerBox: {
+  appShell: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  loadingText: {
-    color: '#94A3B8',
-    marginTop: 16,
-    textAlign: 'center',
-    fontSize: 14,
-  },
-  errorTitle: {
-    color: '#F8FAFC',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  errorText: {
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  retryButton: {
-    backgroundColor: '#7C3AED',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  retryText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    backgroundColor: '#080C14',
+    ...Platform.select({
+      web: {
+        marginVertical: 12,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#1E293B',
+        overflow: 'hidden',
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 10,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
-  overline: {
-    color: '#94A3B8',
+  brandTitle: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 4,
+    color: '#6366F1',
+    letterSpacing: 1.2,
   },
-  title: {
+  screenHeading: {
+    fontSize: 19,
+    fontWeight: '700',
     color: '#F8FAFC',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 6,
+    marginTop: 2,
   },
-  locationRow: {
+  locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  locationText: {
-    color: '#94A3B8',
-    fontSize: 12,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
+    gap: 6,
+    backgroundColor: '#131B2E',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 20,
-    backgroundColor: '#161D2F',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  segmentedControl: {
+  locationPillText: {
+    fontSize: 11,
+    color: '#CBD5E1',
+    fontWeight: '600',
+  },
+  segmentedContainer: {
     flexDirection: 'row',
-    backgroundColor: '#161D2F',
-    borderRadius: 16,
-    padding: 4,
-    marginBottom: 24,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    marginHorizontal: 18,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginBottom: 10,
   },
   segmentTab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 7,
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 9,
   },
-  segmentActive: {
-    backgroundColor: '#7C3AED',
+  segmentTabActive: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
-  segmentText: {
+  segmentLabel: {
+    fontSize: 11,
     color: '#64748B',
-    fontSize: 13,
     fontWeight: '600',
   },
-  segmentTextActive: {
+  segmentLabelActive: {
+    color: '#F8FAFC',
+    fontWeight: '700',
+  },
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: 6,
+    paddingBottom: 24,
+  },
+  centerContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  centerLoadingText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  errorSurface: {
+    backgroundColor: '#1E1520',
+    borderWidth: 1,
+    borderColor: '#4A1D24',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  errorText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    textAlign: 'center',
+    marginVertical: 10,
+    lineHeight: 16,
+  },
+  retryBtn: {
+    backgroundColor: '#E11D48',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  retryBtnText: {
     color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
-  heroCard: {
-    backgroundColor: '#161D2F',
-    borderRadius: 28,
-    padding: 24,
-    marginBottom: 28,
+  cardSurface: {
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    padding: 16,
+    marginBottom: 14,
   },
-  heroHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  heroOverline: {
-    color: '#7C3AED',
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  iconCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(124, 58, 237, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  innerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#7C3AED',
-  },
-  heroTitle: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 4,
-  },
-  scoreValue: {
-    color: '#FFFFFF',
-    fontSize: 56,
-    fontWeight: 'bold',
-  },
-  scoreSuffix: {
-    color: '#94A3B8',
-    fontSize: 18,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  badgeContainer: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 4,
     paddingHorizontal: 10,
-    paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
   },
-  badgeDot: {
+  statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     marginRight: 6,
   },
-  badgeText: {
+  statusBadgeText: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
-  heroSubText: {
+  scoreText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  recommendationMessage: {
     fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 16,
-  },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: '#1E293B',
-    borderRadius: 3,
-    marginBottom: 24,
-  },
-  progressBarFill: {
-    height: 6,
-    borderRadius: 3,
-  },
-  tipBox: {
-    flexDirection: 'row',
-    backgroundColor: '#0B0F19',
-    padding: 16,
-    borderRadius: 20,
-  },
-  tipContent: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  tipTitle: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  tipText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  sectionSubtitle: {
-    color: '#94A3B8',
-    fontSize: 12,
-  },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  gridCard: {
-    width: '48%',
-    backgroundColor: '#161D2F',
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: '#E2E8F0',
+    lineHeight: 19,
     marginBottom: 12,
   },
-  cardTitle: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  metricRow: {
+  probeFootnote: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    paddingTop: 10,
+  },
+  probeFootnoteText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  timelineSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'baseline',
     marginBottom: 8,
   },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  sectionSub: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  timelineScrollList: {
+    flexDirection: 'row',
+    paddingVertical: 4,
+    paddingRight: 10,
+    marginBottom: 14,
+  },
+  timelineCard: {
+    width: 68,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  timelineCardActive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#6366F1',
+  },
+  timelineHour: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginBottom: 4,
+  },
+  timelineHourActive: {
+    color: '#F8FAFC',
+  },
+  timelineStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  timelineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  timelineScore: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  timelineScoreActive: {
+    color: '#CBD5E1',
+    fontWeight: '700',
+  },
+  emptyTimelineText: {
+    fontSize: 11,
+    color: '#64748B',
+    paddingVertical: 8,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    padding: 12,
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  metricValRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
   metricValue: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#F8FAFC',
   },
   metricUnit: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  badgeCyan: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  badgeCyanText: {
-    color: '#06B6D4',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  cardDesc: {
-    color: '#64748B',
     fontSize: 11,
-    lineHeight: 16,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  metricHint: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 6,
+    lineHeight: 14,
   },
   disclaimer: {
-    color: '#64748B',
     fontSize: 10,
+    color: '#475569',
     textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 20,
     lineHeight: 14,
-  }
+    marginTop: 4,
+  },
+  timeSlotsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
+  timeSlotPill: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    alignItems: 'center',
+  },
+  timeSlotPillActive: {
+    backgroundColor: '#312E81',
+    borderColor: '#6366F1',
+  },
+  timeSlotPillText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  timeSlotPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  activitiesContainer: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  activityRowActive: {
+    backgroundColor: '#1E293B40',
+  },
+  activityLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  activityIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityIconWrapActive: {
+    backgroundColor: '#312E81',
+  },
+  activityLabel: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  activityLabelActive: {
+    color: '#F8FAFC',
+    fontWeight: '600',
+  },
+  radioCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#475569',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircleActive: {
+    borderColor: '#6366F1',
+  },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#6366F1',
+  },
+  resultSurface: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    minHeight: 70,
+    justifyContent: 'center',
+  },
+  resultLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  resultLoadingText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  resultVerdictRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  resultVerdictTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  resultVerdictDescription: {
+    fontSize: 12,
+    color: '#94A3B8',
+    lineHeight: 17,
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#0B1120',
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    paddingVertical: 8,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  tabButtonLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabButtonLabelActive: {
+    color: '#6366F1',
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#0F172A',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  modalOptionActive: {
+    backgroundColor: '#1E293B',
+  },
+  modalOptionText: {
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  modalOptionTextActive: {
+    color: '#F8FAFC',
+    fontWeight: '600',
+  },
 });
