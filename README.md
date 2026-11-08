@@ -45,6 +45,14 @@ O aplicativo organiza a experiência em abas inferiores nativas (*Bottom Navigat
 * **As 6 Atividades da Especificação:** Videoconferência, chamada de áudio, streaming HD, envio de arquivos, navegação e mensagens instantâneas.
 * **Classificação Semântica em 3 Estados:** Diagnóstico entre **Adequada**, **Adequada com ressalvas** e **Não recomendada**, orientando com clareza o comportamento da rede em tarefas críticas.
 
+  ## 📸 Demonstração da Interface
+
+<div align="center">
+  <img src="frontend/assets/tela-previsao.png" width="310" alt="Aba Previsão" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="frontend/assets/tela-atividades.png" width="310" alt="Aba Atividades" />
+</div>
+
 ---
 
 ## 🔌 Contratos da API & Status de Integração
