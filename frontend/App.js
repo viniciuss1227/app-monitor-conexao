@@ -275,7 +275,7 @@ export default function App() {
         {/* Topo Global */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.brandTitle}>SENTINELA DE REDES</Text>
+            <Text style={styles.brandTitle}>MONITOR DE CONEXÃO</Text>
             <Text style={styles.screenHeading}>
               {activeTab === 'forecast' ? 'Previsão Regional' : 'Validação de Tarefas'}
             </Text>
