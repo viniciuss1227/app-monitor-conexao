@@ -127,7 +127,7 @@ Você pode testar o aplicativo diretamente pelo navegador ou no seu celular sem 
 
 * **Acessar Demonstração:** [Abrir Monitor de Conexão no Expo Snack](https://snack.expo.dev/@radiohead_0/monitor-de-conexao)
 * **No Navegador:** Ao abrir o link, selecione a aba **Web** no painel direito para interagir com a interface imediatamente. *(Nota: Como a API está hospedada no plano gratuito do Render, a primeira requisição pode levar cerca de 45 segundos a 2 minutos para ativar o servidor).*
-* **No Celular (Expo Go):** Clique em **My Device** no painel direito e escaneie o QR Code utilizando o aplicativo **Expo Go** (Android/iOS).
+* **No Celular (Expo Go):** Clique em **My Device** no painel direito e escaneie o QR Code utilizando o aplicativo **Expo Go** (Android/iOS). Caso apareça um aviso de versão incompatível, basta alterar a versão do SDK no canto inferior direito da tela do Snack (ex: `v54.0.0` ou `v55.0.0`) para coincidir com a do seu aplicativo.
 
 ---
 
