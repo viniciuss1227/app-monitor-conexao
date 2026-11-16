@@ -1,4 +1,4 @@
-# 🌐 Monitor de Conexão — Previsão de Qualidade de Rede
+#  Monitor de Conexão — Previsão de Qualidade de Rede
 
 *Projeto Interdisciplinar — Centro Universitário Braz Cubas — Semestre 2026/2*  
 *Integração Curricular:* Programação para Dispositivos Móveis • Análise e Projeto de Sistemas II • Redes de Computadores  
@@ -6,7 +6,7 @@
 
 ---
 
-## 📌 Visão Geral do Produto
+##  Visão Geral do Produto
 
 O **Monitor de Conexão** é uma solução móvel desenvolvida para mitigar o impacto da instabilidade de rede para estudantes e profissionais em regime de teletrabalho. O sistema cruza dados históricos de telemetria pública com modelos preditivos de inteligência artificial para antecipar períodos de degradação da conexão, traduzindo métricas técnicas complexas em diretrizes práticas e acessíveis.
 
@@ -14,7 +14,7 @@ O projeto está fundamentado no **ODS 9 (Indústria, Inovação e Infraestrutura
 
 ---
 
-## 📡 Fundamentos de Redes de Computadores & Telemetria
+##  Fundamentos de Redes de Computadores & Telemetria
 
 O sistema apoia-se em conceitos estruturais da arquitetura de redes para transformar medições brutas em recomendações contextualizadas:
 
@@ -30,7 +30,7 @@ O sistema apoia-se em conceitos estruturais da arquitetura de redes para transfo
 
 ---
 
-## 📱 Funcionalidades da Interface Mobile (React Native)
+##  Funcionalidades da Interface Mobile (React Native)
 
 O aplicativo organiza a experiência em abas inferiores nativas (*Bottom Navigation Bar*), focadas em acessibilidade (WCAG 2.2 Nível AA) e modo escuro de alto contraste:
 
@@ -45,7 +45,7 @@ O aplicativo organiza a experiência em abas inferiores nativas (*Bottom Navigat
 * **As 6 Atividades da Especificação:** Videoconferência, chamada de áudio, streaming HD, envio de arquivos, navegação e mensagens instantâneas.
 * **Classificação Semântica em 3 Estados:** Diagnóstico entre **Adequada**, **Adequada com ressalvas** e **Não recomendada**, orientando com clareza o comportamento da rede em tarefas críticas.
 
-  ## 📸 Demonstração da Interface
+  ##  Demonstração da Interface
 
 <div align="center">
   <img src="frontend/assets/tela-previsao.png" width="310" alt="Aba Previsão" />
@@ -55,7 +55,7 @@ O aplicativo organiza a experiência em abas inferiores nativas (*Bottom Navigat
 
 ---
 
-## 🔌 Contratos da API & Status de Integração
+##  Contratos da API & Status de Integração
 
 O aplicativo móvel conecta-se em produção à **Internet Quality API** oficial hospedada no Render: `https://internet-quality-api.onrender.com/api/v1`.
 
@@ -70,7 +70,7 @@ O aplicativo móvel conecta-se em produção à **Internet Quality API** oficial
 
 ---
 
-## ♿ Acessibilidade e Experiência do Usuário (RNF01 a RNF09)
+##  Acessibilidade e Experiência do Usuário (RNF01 a RNF09)
 
 * **Tradução Contextual:** Eliminação de barreiras cognitivas pela substituição de jargões técnicos por termos autoexplicativos:
   * *Latência / RTT* → *Tempo de Resposta (Atraso)*
@@ -82,7 +82,7 @@ O aplicativo móvel conecta-se em produção à **Internet Quality API** oficial
 
 ---
 
-## 📁 Estrutura do Monorepo
+##  Estrutura do Monorepo
 
 ```text
 app-monitor-conexao/
@@ -105,7 +105,7 @@ app-monitor-conexao/
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+##  Tecnologias Utilizadas
 
 ### Frontend (Mobile)
 * **Framework:** React Native com ecossistema Expo
@@ -120,7 +120,7 @@ app-monitor-conexao/
 
 ---
 
-## 🚀 Como Testar e Executar o Projeto
+##  Como Testar e Executar o Projeto
 
 ### 1. Demonstração Online Instantânea (Recomendado)
 Você pode testar o aplicativo diretamente pelo navegador ou no seu celular sem precisar instalar dependências ou configurar ambiente local:
