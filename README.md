@@ -120,10 +120,19 @@ app-monitor-conexao/
 
 ---
 
-## 🚀 Como Executar o Projeto
+## 🚀 Como Testar e Executar o Projeto
 
-### 1. Aplicativo Móvel (Avaliação Principal - Mobile)
-Graças à integração com a API em nuvem, não é necessário compilar nem rodar nenhum servidor backend local para testar o aplicativo móvel.
+### 1. Demonstração Online Instantânea (Recomendado)
+Você pode testar o aplicativo diretamente pelo navegador ou no seu celular sem precisar instalar dependências ou configurar ambiente local:
+
+* **Acessar Demonstração:** [Abrir Monitor de Conexão no Expo Snack](https://snack.expo.dev/@radiohead_0/monitor-de-conexao)
+* **No Navegador:** Ao abrir o link, selecione a aba **Web** no painel direito para interagir com a interface imediatamente. *(Nota: Como a API está hospedada no plano gratuito do Render, a primeira requisição pode levar cerca de 45 segundos a 2 minutos para ativar o servidor).*
+* **No Celular (Expo Go):** Clique em **My Device** no painel direito e escaneie o QR Code utilizando o aplicativo **Expo Go** (Android/iOS).
+
+---
+
+### 2. Execução Local (Frontend Mobile)
+Caso prefira rodar o código-fonte diretamente na sua máquina:
 
 1. Acesse a pasta do frontend e instale as dependências:
    ```bash
